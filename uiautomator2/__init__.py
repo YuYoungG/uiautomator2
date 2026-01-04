@@ -888,6 +888,16 @@ class Device(_Device, _AppMixIn, _PluginMixIn, InputMethodMixIn, _DeprecatedMixI
             # 安装输入法后继续输入
             InputMethodMixIn.send_keys(self, text)
 
+    @property
+    def webview(self):  
+        """
+        Extension: Hybrid WebView Support
+        """
+        if not hasattr(self, '_webview_ext'): 
+            from uiautomator2.ext.webview import WebViewExtension 
+            self._webview_ext = WebViewExtension(self)
+        return self._webview_ext
+
 
 class Session(Device):
     """Session keeps watch the app status
