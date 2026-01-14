@@ -10,6 +10,16 @@ import socket
 import subprocess
 from pathlib import Path
 
+# Third-party imports (Hard dependencies)
+import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+
+
 class WebViewDetector:
     """负责检测手机上的 WebView 版本"""
     
@@ -21,8 +31,12 @@ class WebViewDetector:
             return s.getsockname()[1]
 
     @staticmethod
-    def get_version(d, requests):
-        # 直接连接正在运行的 WebView，询问其版本
+    def get_version(d):
+        """
+        直接连接正在运行的 WebView，询问其版本
+        Args:
+            d: uiautomator2 Device 对象
+        """
         try:
             # 1. 查找 Socket
             # grep -a 防止二进制干扰
@@ -49,6 +63,7 @@ class WebViewDetector:
                 try:
                     # 3. 调用 CDP Version 接口
                     url = f"http://127.0.0.1:{local_port}/json/version"
+                    # 直接使用全局 requests
                     resp = requests.get(url, timeout=3)
                     if resp.status_code == 200:
                         data = resp.json()
@@ -79,8 +94,7 @@ class ChromeDriverDownloader:
     LEGACY_RELEASE_URL = "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_"
     LEGACY_DOWNLOAD_BASE = "https://chromedriver.storage.googleapis.com"
 
-    def __init__(self, requests_mod):
-        self.requests = requests_mod
+    def __init__(self):
         # 将保存目录设为当前工作目录(用户脚本同级)下的 drivers 文件夹
         self.save_dir = Path.cwd() / "drivers"
         self.save_dir.mkdir(parents=True, exist_ok=True)
@@ -128,7 +142,8 @@ class ChromeDriverDownloader:
 
     def _fetch_version_string(self, url):
         try:
-            resp = self.requests.get(url, timeout=10)
+            # 直接使用全局 requests
+            resp = requests.get(url, timeout=10)
             if resp.status_code == 200:
                 return resp.text.strip()
         except Exception as e:
@@ -144,7 +159,8 @@ class ChromeDriverDownloader:
             return str(target_file.absolute())
 
         try:
-            resp = self.requests.get(url, stream=True, timeout=30)
+            # 直接使用全局 requests
+            resp = requests.get(url, stream=True, timeout=30)
             if resp.status_code != 200:
                 return None
             
@@ -170,40 +186,6 @@ class WebViewExtension:
     def __init__(self, d):
         self.d = d
         self.driver = None
-        self._deps_loaded = False
-
-    def _check_dependencies(self):
-        """检查并延迟导入依赖"""
-        if self._deps_loaded:
-            return
-
-        try:
-            # Selenium 依赖
-            import selenium.webdriver
-            from selenium.webdriver.chrome.service import Service
-            from selenium.webdriver.chrome.options import Options
-            from selenium.webdriver.support.ui import WebDriverWait
-            from selenium.webdriver.support import expected_conditions as EC
-            from selenium.webdriver.common.by import By
-            # 网络依赖
-            import requests 
-
-            self.webdriver = selenium.webdriver
-            self.Service = Service
-            self.Options = Options
-            self.WebDriverWait = WebDriverWait
-            self.EC = EC
-            self.By = By
-            self.requests = requests
-            
-            self._deps_loaded = True
-        except ImportError as e:
-            missing = "requests" if "requests" in str(e) else "selenium"
-            raise ImportError(
-                f"❌ 检测到未安装 {missing}。\n"
-                f"uiautomator2.ext.webview 需要 selenium 和 requests 库支持。\n"
-                f"请运行: pip install {missing}"
-            )
 
     def attach(self, package_name: str, chromedriver_path: str = None, activity: str = None, process_name: str = None, extra_args: list = None):
         """
@@ -216,15 +198,13 @@ class WebViewExtension:
             process_name: (可选) 进程名
             extra_args: (可选) 额外的 Chrome 启动参数 list
         """
-        self._check_dependencies()
-
         # 自动下载逻辑
         if not chromedriver_path:
             try:
-                # 1. 检测版本
-                version = WebViewDetector.get_version(self.d, self.requests)
-                # 2. 下载驱动
-                downloader = ChromeDriverDownloader(self.requests)
+                # 1. 检测版本 (不需要传 requests 了)
+                version = WebViewDetector.get_version(self.d)
+                # 2. 下载驱动 (不需要传 requests 了)
+                downloader = ChromeDriverDownloader()
                 downloaded_path = downloader.download(version)
                 if downloaded_path:
                     chromedriver_path = downloaded_path
@@ -236,8 +216,8 @@ class WebViewExtension:
         if not os.path.exists(chromedriver_path):
             raise FileNotFoundError(f"can not find ChromeDriver: {chromedriver_path}")
 
-        # 配置 Options
-        options = self.Options()
+        # 配置 Options (直接使用导入的类)
+        options = Options()
         options.add_experimental_option('androidPackage', package_name)
         options.add_experimental_option('androidUseRunningApp', True)
         options.add_experimental_option('androidDeviceSerial', self.d.serial)
@@ -253,8 +233,10 @@ class WebViewExtension:
                 options.add_argument(arg)
 
         try:
-            service = self.Service(executable_path=chromedriver_path)
-            self.driver = self.webdriver.Chrome(service=service, options=options)
+            # 启动 Service
+            service = Service(executable_path=chromedriver_path)
+            # 启动 WebDriver
+            self.driver = webdriver.Chrome(service=service, options=options)
             time.sleep(1.0)
             return self.driver
         except Exception as e:
@@ -277,7 +259,7 @@ class WebViewExtension:
         if not self.driver:
             raise RuntimeError("请先调用 d.webview.attach() 启动 WebView 模式")
         
-        self._check_dependencies()
-        return self.WebDriverWait(self.driver, timeout).until(
-            self.EC.presence_of_element_located((by, value))
+        # 直接使用 WebDriverWait 和 EC
+        return WebDriverWait(self.driver, timeout).until(
+            EC.presence_of_element_located((by, value))
         )
