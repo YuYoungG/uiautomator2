@@ -90,9 +90,9 @@ class ChromeDriverDownloader:
     """负责下载 ChromeDriver (自动适配 Legacy 和 CfT)"""
     
     CFT_RELEASE_URL = "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_"
-    CFT_DOWNLOAD_BASE = "https://storage.googleapis.com/chrome-for-testing-public"
-    LEGACY_RELEASE_URL = "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_"
-    LEGACY_DOWNLOAD_BASE = "https://chromedriver.storage.googleapis.com"
+    CFT_DOWNLOAD_BASE = "https://registry.npmmirror.com/-/binary/chrome-for-testing"
+    LEGACY_RELEASE_URL = "https://registry.npmmirror.com/-/binary/chromedriver/LATEST_RELEASE_"
+    LEGACY_DOWNLOAD_BASE = "https://registry.npmmirror.com/-/binary/chromedriver"
 
     def __init__(self):
         # 将保存目录设为当前工作目录(用户脚本同级)下的 drivers 文件夹
