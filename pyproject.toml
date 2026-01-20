@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "uiautomator2"
-version = "3.2.0+webviewext"
+version = "3.2.1+webviewext"
 description = "uiautomator for android device with webviewextension"
 homepage = "https://github.com/YuYoungG/uiautomator2/tree/feat/webview-extension"
 authors = ["YuYoungG <younggg2218@gmail.com>"]

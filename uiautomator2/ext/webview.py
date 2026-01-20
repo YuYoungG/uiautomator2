@@ -80,9 +80,9 @@ class ChromeDriverDownloader:
     
     # 国内镜像源
     CFT_RELEASE_URL = "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_"
-    CFT_DOWNLOAD_BASE = "https://registry.npmmirror.com/-/binary/chrome-for-testing"
-    LEGACY_RELEASE_URL = "https://registry.npmmirror.com/-/binary/chromedriver/LATEST_RELEASE_"
-    LEGACY_DOWNLOAD_BASE = "https://registry.npmmirror.com/-/binary/chromedriver"
+    CFT_DOWNLOAD_BASE = "https://cdn.npmmirror.com/binaries/chrome-for-testing"
+    LEGACY_RELEASE_URL = "https://cdn.npmmirror.com/binaries/chromedriver/LATEST_RELEASE_"
+    LEGACY_DOWNLOAD_BASE = "https://cdn.npmmirror.com/binaries/chromedriver"
 
     def __init__(self):
         # 将保存目录设为当前工作目录(用户脚本同级)下的 drivers 文件夹
@@ -99,10 +99,14 @@ class ChromeDriverDownloader:
         elif system == "linux":
             return "linux64"
         elif system == "darwin":
-            if "arm" in machine or "aarch64" in machine:
-                return "mac-arm64" if is_cft else "mac64_m1"
+            if is_cft:
+                # CfT (>=115) 区分 arm64 和 x64
+                return "mac-arm64" if "arm" in machine or "aarch64" in machine else "mac-x64"
             else:
-                return "mac-x64" if is_cft else "mac64"
+                # 🟢 Legacy (<115): 统一使用 mac64 (Intel版)
+                # M1/M2/M3 可以通过 Rosetta 2 完美运行 Intel 版驱动
+                # 这样避免了旧版本中 mac64_m1 命名混乱或缺失的问题
+                return "mac64"
         raise RuntimeError(f"不支持的操作系统: {system}")
 
     def download(self, version_full):
@@ -118,6 +122,7 @@ class ChromeDriverDownloader:
     def _process_cft(self, version_base):
         # CfT 逻辑
         lookup_url = f"{self.CFT_RELEASE_URL}{version_base}"
+
         exact_version = self._fetch_version_string(lookup_url)
         if not exact_version: 
             exact_version = version_base
@@ -145,7 +150,7 @@ class ChromeDriverDownloader:
 
     def _fetch_version_string(self, url):
         try:
-            resp = requests.get(url, timeout=10)
+            resp = requests.get(url, timeout=60)
             if resp.status_code == 200:
                 return resp.text.strip()
         except:
@@ -161,16 +166,8 @@ class ChromeDriverDownloader:
         # 定义一个内部函数处理权限和隔离属性
         def _set_executable(path):
             if os.name != 'nt':
-                try:
-                    # 1. 赋予执行权限
-                    st = os.stat(path)
-                    os.chmod(path, st.st_mode | stat.S_IEXEC)
-                    # 2. macOS 特有：移除 com.apple.quarantine 属性，防止Gatekeeper拦截
-                    if platform.system() == 'Darwin':
-                        subprocess.run(["xattr", "-d", "com.apple.quarantine", str(path)], 
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                except Exception:
-                    pass
+                st = os.stat(path)
+                os.chmod(path, st.st_mode | stat.S_IEXEC)
 
         if target_file.exists():
             _set_executable(target_file)
@@ -280,3 +277,4 @@ class WebViewExtension:
         return WebDriverWait(self.driver, timeout).until(
             EC.presence_of_element_located((by, value))
         )
+        
